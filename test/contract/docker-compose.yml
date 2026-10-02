@@ -1,0 +1,158 @@
+# Contract-test stack: the six services of Arrowhead-520-Go-Evol's
+# deploy/docker-compose.consumerauth.yml at the pinned tag, from images only.
+#
+# Differences from that file, and nothing else (checked by scenario T0):
+#   - image: instead of build:
+#   - token settings: REGISTER_AUTH_URL and MGMT_AUTH_URL on serviceregistry,
+#     MGMT_AUTH_URL and SYSOP_PASSWORD on authentication, MGMT_AUTH_URL on
+#     consumerauth and on dynamicorch-xacml
+#   - extra_hosts on dynamicorch-xacml, so push delivery reaches the test host
+#   - the mosquitto broker (the stack has none)
+#
+# Run through test/contract/run.sh; SYSOP_PASSWORD must be set.
+
+name: ah-sdk-harness
+
+services:
+
+  profile-ca:
+    image: ghcr.io/ulfbod/profile-ca:${TAG:-v0.1.0}
+    environment:
+      PORT: "8787"
+      TLS_PORT: "8788"
+      GRPC_PORT: "8789"
+      CA_KEY_FILE: "/data/ca.key"
+    volumes:
+      - profile-ca-data:/data
+    ports:
+      - "8787:8787"
+      - "8788:8788"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8787/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  cert-provisioner:
+    image: ghcr.io/ulfbod/cert-provisioner:${TAG:-v0.1.0}
+    environment:
+      CA_URL: "http://profile-ca:8787"
+      CERTS_DIR: "/certs"
+    volumes:
+      - certs:/certs
+    depends_on:
+      profile-ca:
+        condition: service_healthy
+    restart: "no"
+
+  serviceregistry:
+    image: ghcr.io/ulfbod/serviceregistry:${TAG:-v0.1.0}
+    environment:
+      PORT: "8080"
+      TLS_PORT: "8490"
+      TLS_CERT_FILE: "/certs/serviceregistry.crt"
+      TLS_KEY_FILE:  "/certs/serviceregistry.key"
+      TLS_CA_FILE:   "/certs/ca.crt"
+      DB_PATH: "/data/serviceregistry.db"
+      REGISTER_AUTH_URL: "http://authentication:8081"
+      MGMT_AUTH_URL: "http://authentication:8081"
+    ports:
+      - "8490:8490"
+    volumes:
+      - certs:/certs:ro
+      - serviceregistry-data:/data
+    depends_on:
+      cert-provisioner:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  authentication:
+    image: ghcr.io/ulfbod/authentication:${TAG:-v0.1.0}
+    environment:
+      PORT: "8081"
+      TLS_PORT: "8491"
+      TLS_CERT_FILE: "/certs/authentication.crt"
+      TLS_KEY_FILE:  "/certs/authentication.key"
+      TLS_CA_FILE:   "/certs/ca.crt"
+      DB_PATH: "/data/authentication.db"
+      MGMT_AUTH_URL: "http://authentication:8081"
+      SYSOP_PASSWORD: "${SYSOP_PASSWORD:?set SYSOP_PASSWORD}"
+    ports:
+      - "8491:8491"
+    volumes:
+      - certs:/certs:ro
+      - authentication-data:/data
+    depends_on:
+      cert-provisioner:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  consumerauth:
+    image: ghcr.io/ulfbod/consumerauth:${TAG:-v0.1.0}
+    environment:
+      PORT: "8082"
+      TLS_PORT: "8492"
+      TLS_CERT_FILE: "/certs/consumerauth.crt"
+      TLS_KEY_FILE:  "/certs/consumerauth.key"
+      TLS_CA_FILE:   "/certs/ca.crt"
+      DB_PATH: "/data/consumerauth.db"
+      MGMT_AUTH_URL: "http://authentication:8081"
+    ports:
+      - "8492:8492"
+    volumes:
+      - certs:/certs:ro
+      - consumerauth-data:/data
+    depends_on:
+      cert-provisioner:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  dynamicorch-xacml:
+    image: ghcr.io/ulfbod/dynamicorch-xacml:${TAG:-v0.1.0}
+    environment:
+      SR_URL: "http://serviceregistry:8080"
+      AUTH_BACKEND: "consumerauth"
+      CA_URL: "http://consumerauth:8082"
+      ENABLE_AUTH: "true"
+      PORT: "8083"
+      MGMT_AUTH_URL: "http://authentication:8081"
+    ports:
+      - "8083:8083"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      serviceregistry:
+        condition: service_healthy
+      consumerauth:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/status || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    ports:
+      - "1883:1883"
+
+volumes:
+  certs:
+  profile-ca-data:
+  serviceregistry-data:
+  authentication-data:
+  consumerauth-data:
