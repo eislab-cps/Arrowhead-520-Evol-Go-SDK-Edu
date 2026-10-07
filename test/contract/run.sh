@@ -5,19 +5,30 @@
 #
 # Needs GOEVOL_DIR and STACK_REV (see build-images.sh) and Docker.
 #   GOEVOL_DIR=... STACK_REV=... bash test/contract/run.sh [go test -run pattern]
+#
+# PULL_ONLY=1 runs against the published images instead: no local build,
+# `docker compose pull` before up, and T0 proves every image is the one the
+# registry serves for $TAG (image ID = registry manifest digest) with revision
+# label STACK_REV (the full public commit). This is the run that matches what
+# students pull.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../.." && pwd)"
 : "${GOEVOL_DIR:?set GOEVOL_DIR to the stack source tree}"
 : "${STACK_REV:?set STACK_REV to the stack revision of GOEVOL_DIR}"
-export TAG="${TAG:-v0.1.0}"
+export TAG="${TAG:-v0.1.3}"
 export SYSOP_PASSWORD="${SYSOP_PASSWORD:-$(od -An -tx1 -N12 /dev/urandom | tr -d ' \n')}"
+export PULL_ONLY="${PULL_ONLY:-}"
 export GOEVOL_DIR STACK_REV
 
-bash "$HERE/build-images.sh"
-
 COMPOSE=(docker compose -f "$HERE/docker-compose.yml")
+if [ "$PULL_ONLY" = 1 ]; then
+  echo "run: PULL_ONLY=1, pulling images, no local build"
+  "${COMPOSE[@]}" pull --quiet
+else
+  bash "$HERE/build-images.sh"
+fi
 cleanup() { "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true; echo "run: stack removed (down -v)"; }
 trap cleanup EXIT
 

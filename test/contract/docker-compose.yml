@@ -16,7 +16,7 @@ name: ah-sdk-harness
 services:
 
   profile-ca:
-    image: ghcr.io/ulfbod/profile-ca:${TAG:-v0.1.0}
+    image: ghcr.io/ulfbod/profile-ca:${TAG:-v0.1.3}
     environment:
       PORT: "8787"
       TLS_PORT: "8788"
@@ -34,7 +34,7 @@ services:
       retries: 10
 
   cert-provisioner:
-    image: ghcr.io/ulfbod/cert-provisioner:${TAG:-v0.1.0}
+    image: ghcr.io/ulfbod/cert-provisioner:${TAG:-v0.1.3}
     environment:
       CA_URL: "http://profile-ca:8787"
       CERTS_DIR: "/certs"
@@ -46,7 +46,7 @@ services:
     restart: "no"
 
   serviceregistry:
-    image: ghcr.io/ulfbod/serviceregistry:${TAG:-v0.1.0}
+    image: ghcr.io/ulfbod/serviceregistry:${TAG:-v0.1.3}
     environment:
       PORT: "8080"
       TLS_PORT: "8490"
@@ -71,7 +71,7 @@ services:
       retries: 10
 
   authentication:
-    image: ghcr.io/ulfbod/authentication:${TAG:-v0.1.0}
+    image: ghcr.io/ulfbod/authentication:${TAG:-v0.1.3}
     environment:
       PORT: "8081"
       TLS_PORT: "8491"
@@ -96,7 +96,7 @@ services:
       retries: 10
 
   consumerauth:
-    image: ghcr.io/ulfbod/consumerauth:${TAG:-v0.1.0}
+    image: ghcr.io/ulfbod/consumerauth:${TAG:-v0.1.3}
     environment:
       PORT: "8082"
       TLS_PORT: "8492"
@@ -120,7 +120,7 @@ services:
       retries: 10
 
   dynamicorch-xacml:
-    image: ghcr.io/ulfbod/dynamicorch-xacml:${TAG:-v0.1.0}
+    image: ghcr.io/ulfbod/dynamicorch-xacml:${TAG:-v0.1.3}
     environment:
       SR_URL: "http://serviceregistry:8080"
       AUTH_BACKEND: "consumerauth"

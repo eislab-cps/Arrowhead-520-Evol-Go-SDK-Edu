@@ -8,11 +8,11 @@ This file is the source of truth for the SDK; code follows it.
 | Item | Value |
 |---|---|
 | Stack repo | `github.com/ulfbod/Arrowhead-520-Go-Evol` |
-| Tag | `v0.1.0` |
+| Tag | `v0.1.3` |
 | SPECs cited | `foundation/SPEC.md` (F), `core/SPEC.md` (C), `services/profile-ca/SPEC.md` (P), at the tag |
 | Compose used by the contract test | `deploy/docker-compose.consumerauth.yml` at the tag (six services), with the token settings below |
 | Token settings assumed | `REGISTER_AUTH_URL` on ServiceRegistry; `MGMT_AUTH_URL` on ServiceRegistry, Authentication and ConsumerAuthorization; `SYSOP_PASSWORD` on Authentication; `MGMT_AUTH_URL` on dynamicorch-xacml. `LOOKUP_AUTH_URL` and `SERVICE_DISCOVERY_POLICY` unset. |
-| Images | `ghcr.io/ulfbod/<name>:v0.1.0` for `serviceregistry`, `authentication`, `consumerauth`, `dynamicorch-xacml`, `profile-ca`, `cert-provisioner` |
+| Images | `ghcr.io/ulfbod/<name>:v0.1.3` for `serviceregistry`, `authentication`, `consumerauth`, `dynamicorch-xacml`, `profile-ca`, `cert-provisioner` |
 | Orchestrator mode assumed | `AUTH_BACKEND=consumerauth` (XACML/PDP mode is out of scope for the SDK) |
 
 Citations name the SPEC section heading. Where a SPEC leaves something out that the SDK
@@ -101,9 +101,9 @@ relies on `origin` being non-empty.
 | C11 | auth | ConsumerAuthorization | `DELETE /consumerauthorization/authorization/revoke/{instanceId}` | mTLS | none; not under `MGMT_AUTH_URL` (no token check in code) | 200 | 400, 404 | F §3 "DELETE .../authorization/revoke/{instanceId}" |
 | C12 | auth | ConsumerAuthorization | `POST /consumerauthorization/authorization/lookup` | mTLS | none; not under `MGMT_AUTH_URL` (no token check in code) | 200 | 400 | F §3 "POST .../authorization/lookup" |
 | C13 | ca | profile-ca | `GET /ca/info` | http (8787) | none | 200 | — | P "Plain HTTP Endpoints" `GET /ca/info` |
-| C14 | ca | profile-ca | `POST /bootstrap/onboarding-cert` | http (8787) | none | 201 | 400 | P "Plain HTTP Endpoints" `POST /bootstrap/onboarding-cert` |
-| C15 | ca | profile-ca | `POST /ca/device-cert` | mTLS (8788), client cert OU=on | onboarding certificate | 201 | 400, 403; TLS handshake failure (no HTTP status) without a certificate from this CA | P "mTLS Endpoints" `POST /ca/device-cert` |
-| C16 | ca | profile-ca | `POST /ca/system-cert` | mTLS (8788), client cert OU=de | device certificate | 201 | 400, 403; TLS handshake failure (no HTTP status) without a certificate from this CA | P "mTLS Endpoints" `POST /ca/system-cert` |
+| C14 | ca | profile-ca | `POST /bootstrap/onboarding-cert` | http (8787) | none | 201 | 400, 500 | P "Plain HTTP Endpoints" `POST /bootstrap/onboarding-cert` |
+| C15 | ca | profile-ca | `POST /ca/device-cert` | mTLS (8788), client cert OU=on | onboarding certificate | 201 | 400, 403, 500; TLS handshake failure (no HTTP status) without a certificate from this CA | P "mTLS Endpoints" `POST /ca/device-cert` |
+| C16 | ca | profile-ca | `POST /ca/system-cert` | mTLS (8788), client cert OU=de | device certificate | 201 | 400, 403, 500; TLS handshake failure (no HTTP status) without a certificate from this CA | P "mTLS Endpoints" `POST /ca/system-cert` |
 | C17 | events | MQTT broker (not a stack system) | publish / subscribe, interface `MQTT-INSECURE-JSON` | `tcp` MQTT, no TLS, no broker auth | none | — | — | F §11 "MQTT Communication Profiles" (interface name); C2 for how an MQTT provider is registered |
 
 ## Shapes per row
@@ -435,7 +435,8 @@ Response `201` (all three; `profile` is `on`, `de` or `sy`):
   "issuedAt": "2026-06-25T00:00:00Z"
 }
 ```
-C14 `400`: invalid JSON or empty `systemName` (`services/profile-ca/handlers.go` onboarding handler). C15 and C16: `400` invalid JSON; `403` client certificate
+C14–C16 `500`: profile-ca could not persist the new certificate record; no certificate is
+returned (P, persistent CA state, since stack `v0.1.2`). C14 `400`: invalid JSON or empty `systemName` (`services/profile-ca/handlers.go` onboarding handler). C15 and C16: `400` invalid JSON; `403` client certificate
 has the wrong OU, or `systemName` is empty (the empty-name case is from
 `services/profile-ca/handlers.go` `handleDeviceCert`, `handleSystemCert`; P lists only
 the OU case). Without a client certificate from this CA the TLS handshake fails and there

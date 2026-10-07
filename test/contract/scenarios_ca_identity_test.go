@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/eislab-cps/Arrowhead-520-Evol-Go-SDK-Edu/ca"
@@ -73,7 +74,7 @@ func t0(t *testing.T, h *harness) {
 	}
 	rev, tag := env(t, "STACK_REV"), os.Getenv("TAG")
 	if tag == "" {
-		tag = "v0.1.0"
+		tag = "v0.1.3"
 	}
 	for _, svc := range stackServices {
 		img := "ghcr.io/ulfbod/" + svc + ":" + tag
@@ -82,7 +83,62 @@ func t0(t *testing.T, h *harness) {
 		if err != nil || string(out) != rev+"\n" {
 			t.Errorf("%s: revision label %q, want %q (%v)", img, out, rev, err)
 		}
+		id, err := exec.Command("docker", "image", "inspect", "--format", "{{.Id}}", img).Output()
+		if err != nil {
+			t.Fatalf("%s: %v", img, err)
+		}
+		local := strings.TrimSpace(string(id))
+		if os.Getenv("PULL_ONLY") != "1" {
+			t.Logf("%s: local build %s (not checked against the registry)", img, local)
+			continue
+		}
+		// The registry's manifest digest for the tag. With Docker's containerd
+		// image store, a pulled image's ID is that digest; a local build's is not.
+		// RepoDigests cannot tell the two apart: that store fills it for local
+		// builds too.
+		remote := registryDigest(t, svc, tag)
+		if local != remote {
+			t.Errorf("%s: image ID %s is not the registry's %s; not the published image", img, local, remote)
+		} else {
+			t.Logf("%s: pulled image, ID = registry digest %s", img, remote)
+		}
 	}
+}
+
+// registryDigest asks ghcr.io for the manifest digest of ulfbod/<name>:<tag>,
+// anonymously, as a student's docker pull would.
+func registryDigest(t *testing.T, name, tag string) string {
+	t.Helper()
+	resp, err := http.Get("https://ghcr.io/token?scope=repository:ulfbod/" + name + ":pull")
+	if err != nil {
+		t.Fatalf("ghcr token: %v", err)
+	}
+	var tok struct {
+		Token string `json:"token"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&tok)
+	resp.Body.Close()
+	if err != nil || tok.Token == "" {
+		t.Fatalf("ghcr token for %s: %v", name, err)
+	}
+	req, _ := http.NewRequest(http.MethodHead, "https://ghcr.io/v2/ulfbod/"+name+"/manifests/"+tag, nil)
+	req.Header.Set("Authorization", "Bearer "+tok.Token)
+	req.Header.Set("Accept", strings.Join([]string{
+		"application/vnd.oci.image.index.v1+json",
+		"application/vnd.docker.distribution.manifest.list.v2+json",
+		"application/vnd.oci.image.manifest.v1+json",
+		"application/vnd.docker.distribution.manifest.v2+json",
+	}, ", "))
+	head, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("ghcr manifest %s:%s: %v", name, tag, err)
+	}
+	head.Body.Close()
+	d := head.Header.Get("Docker-Content-Digest")
+	if head.StatusCode != http.StatusOK || d == "" {
+		t.Fatalf("ghcr manifest %s:%s: status %d, digest %q", name, tag, head.StatusCode, d)
+	}
+	return d
 }
 
 // T13 (C13): CA certificate.

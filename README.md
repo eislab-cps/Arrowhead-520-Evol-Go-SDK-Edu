@@ -8,14 +8,16 @@ explicit: registration, discovery, orchestration, authorization, identity,
 certificates and MQTT events. It is not a production SDK, not a runtime framework,
 and it never auto-registers, auto-discovers or auto-authorizes anything.
 
-**Status:** `v0.1.0`, pinned to Arrowhead-520-Go-Evol `v0.1.0` (see `CONTRACT.md`). Every
-module is covered by a contract test against that stack version. Module path:
+**Status:** `v0.1.1`, pinned to Arrowhead-520-Go-Evol `v0.1.3` (see `CONTRACT.md`). Every
+module is covered by a contract test against that stack version, run on the published
+images. Compatibility: v0.1.1 changes only tests, CI and documentation; the package API
+is identical to v0.1.0, and v0.1.0 passes the same contract test against stack v0.1.3. Module path:
 `github.com/eislab-cps/Arrowhead-520-Evol-Go-SDK-Edu`.
 
 ## Quick start
 
 ```bash
-go get github.com/eislab-cps/Arrowhead-520-Evol-Go-SDK-Edu@v0.1.0
+go get github.com/eislab-cps/Arrowhead-520-Evol-Go-SDK-Edu@v0.1.1
 ```
 
 Every step is a call you make yourself. A provider gets a certificate, logs in,
@@ -56,9 +58,10 @@ One runnable program per module is in `examples/` (`ca`, `identity`, `registry`,
 
 ```bash
 go vet ./...      # tier 1
-go test ./...     # tier 2
+go test -race ./...   # tier 2
 # tier 3: contract test against the pinned stack (needs Docker and the stack source tree)
-GOEVOL_DIR=/path/to/Arrowhead-520-Go-Evol STACK_REV=v0.1.0 bash test/contract/run.sh
+GOEVOL_DIR=/path/to/Arrowhead-520-Go-Evol STACK_REV=$(git -C /path/to/Arrowhead-520-Go-Evol rev-parse v0.1.3^{commit}) \
+    bash test/contract/run.sh
 ```
 
 ## Documentation
